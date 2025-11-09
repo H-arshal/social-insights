@@ -6,7 +6,7 @@ export default function Dashboard({ onLogout }) {
   // Removed direct YouTube stats by ID; we'll use search results only
   const [loading, setLoading] = useState(false);
   const [subreddit, setSubreddit] = useState('technology');
-  const [activeTab, setActiveTab] = useState('reddit'); // 'reddit' | 'youtube' | 'instagram'
+  const [activeTab, setActiveTab] = useState('reddit'); // 'reddit' | 'youtube' | 'linkedin'
 
   // Channel search state
   const [channelQuery, setChannelQuery] = useState('Kurzgesagt');
@@ -15,10 +15,11 @@ export default function Dashboard({ onLogout }) {
   const [channels, setChannels] = useState([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
 
-  // Instagram state
-  const [igUrl, setIgUrl] = useState('https://www.instagram.com/therock/');
-  const [igData, setIgData] = useState(null);
-  const [igLoading, setIgLoading] = useState(false);
+  // LinkedIn state
+  const [companyName, setCompanyName] = useState('google');
+  const [companyData, setCompanyData] = useState(null);
+  const [companyView, setCompanyView] = useState(null);
+  const [loadingCompany, setLoadingCompany] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -51,17 +52,35 @@ export default function Dashboard({ onLogout }) {
     }
   };
 
-  const fetchInstagram = async () => {
-    if (!igUrl || !igUrl.startsWith('http')) return;
-    setIgLoading(true);
+  const searchCompany = async () => {
+    if (!companyName || companyName.trim().length < 1) return;
+    setLoadingCompany(true);
     try {
-      const res = await api.get('/api/insights/instagram/community', { params: { url: igUrl } });
-      setIgData(res.data);
+      const res = await api.get('/api/insights/linkedin/company', { params: { name: companyName.trim() } });
+      setCompanyData(res.data);
+      const raw = res.data?.data || res.data; // wrapper returns {query, data}
+      const d = raw?.data || raw; // some providers nest under data.data
+      const cleaned = {
+        name: d?.companyName || d?.name || companyName.trim(),
+        about: d?.about || d?.description || '',
+        industry: d?.industry || d?.industryName || '',
+        organizationType: d?.organizationType || d?.orgType || '',
+        employees: d?.employees || d?.employeeCount || d?.size || null,
+        followers: d?.followers || d?.followersCount || null,
+        funding: d?.funding || null,
+        headquarters: d?.headquarters || d?.hq || d?.location || '',
+        website: d?.website || d?.websiteUrl || '',
+        linkedin: d?.linkedinUrl || d?.profileUrl || '',
+        specialties: d?.specialities || d?.specialties || [],
+        locations: Array.isArray(d?.locations) ? d.locations.slice(0, 5) : (d?.locations ? [d.locations] : [])
+      };
+      setCompanyView(cleaned);
     } catch (e) {
-      console.error('Instagram fetch error', e);
-      setIgData({ error: 'Failed to fetch Instagram data' });
+      setCompanyData({ error: 'Failed to fetch company data' });
+      setCompanyView(null);
+      console.error('LinkedIn company error', e);
     } finally {
-      setIgLoading(false);
+      setLoadingCompany(false);
     }
   };
 
@@ -78,7 +97,7 @@ export default function Dashboard({ onLogout }) {
         <div className="tabs">
           <div className={`tab ${activeTab === 'reddit' ? 'active' : ''}`} onClick={() => setActiveTab('reddit')}>Reddit</div>
           <div className={`tab ${activeTab === 'youtube' ? 'active' : ''}`} onClick={() => setActiveTab('youtube')}>YouTube</div>
-          <div className={`tab ${activeTab === 'instagram' ? 'active' : ''}`} onClick={() => setActiveTab('instagram')}>Instagram</div>
+          <div className={`tab ${activeTab === 'linkedin' ? 'active' : ''}`} onClick={() => setActiveTab('linkedin')}>LinkedIn</div>
         </div>
 
         {/* Reddit Tab */}
@@ -121,40 +140,101 @@ export default function Dashboard({ onLogout }) {
           </>
         )}
 
-        {/* Instagram Tab */}
-        {activeTab === 'instagram' && (
+        {/* LinkedIn Tab */}
+        {activeTab === 'linkedin' && (
           <>
             <div className="panel">
-              <h2 className="panel-title">Instagram Community</h2>
+              <h2 className="panel-title">LinkedIn Company Search</h2>
               <div className="grid" style={{ marginBottom: 16 }}>
-                <input type="text" placeholder="Profile URL (e.g. https://www.instagram.com/therock/)" value={igUrl} onChange={(e) => setIgUrl(e.target.value)} className="input" />
+                <input type="text" placeholder="Company name (e.g. google)" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="input" />
               </div>
-              <button onClick={fetchInstagram} disabled={igLoading} className="btn-primary">{igLoading ? 'Fetching...' : 'Fetch Community'}</button>
+              <button onClick={searchCompany} disabled={loadingCompany} className="btn-primary">{loadingCompany ? 'Searching...' : 'Search Company'}</button>
             </div>
 
-            <div className="panel">
-              <h2 className="panel-title">Result</h2>
-              {igData ? (
-                <>
-                  {igData.error ? (
-                    <p className="muted">{igData.error}</p>
-                  ) : (
-                    <>
-                      {igData.profile_url && (
-                        <div style={{ marginBottom: 12 }}>
-                          <a className="btn-link" href={igData.profile_url} target="_blank" rel="noreferrer">Open Profile</a>
-                        </div>
-                      )}
-                      <pre style={{ whiteSpace: 'pre-wrap', background: '#f9fafb', padding: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                        {JSON.stringify(igData.data || igData, null, 2)}
-                      </pre>
-                    </>
-                  )}
-                </>
-              ) : (
-                <p className="muted">No data yet. Enter a profile URL and click Fetch Community.</p>
-              )}
-            </div>
+            {companyData && (
+              <div className="panel">
+                <h2 className="panel-title">Company Result</h2>
+                {companyData.error ? (
+                  <div className="card-block"><p className="muted">{companyData.error}</p></div>
+                ) : companyView ? (
+                  <div className="card-block">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>{companyView.name}</div>
+                        {companyView.about && <p className="muted" style={{ marginTop: 4 }}>{companyView.about}</p>}
+                        {companyView.website && (
+                          <p style={{ marginTop: 8 }}>
+                            <a className="btn-link" href={companyView.website} target="_blank" rel="noreferrer">Website</a>
+                          </p>
+                        )}
+                        {companyView.linkedin && (
+                          <p style={{ marginTop: 8 }}>
+                            <a className="btn-link" href={companyView.linkedin} target="_blank" rel="noreferrer">LinkedIn</a>
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p><strong>Industry:</strong> {companyView.industry || '-'}</p>
+                        <p><strong>Organization:</strong> {companyView.organizationType || '-'}</p>
+                        <p><strong>Employees:</strong> {companyView.employees ?? '-'}</p>
+                        <p><strong>Followers:</strong> {companyView.followers ?? '-'}</p>
+                        {companyView.funding && (
+                          <>
+                            {typeof companyView.funding === 'object' ? (
+                              <>
+                                <p>
+                                  <strong>Funding:</strong> {companyView.funding.lastRoundFunding ?? '-'}
+                                  {companyView.funding.lastRoundDate ? ` (Last: ${companyView.funding.lastRoundDate})` : ''}
+                                </p>
+                                {Array.isArray(companyView.funding.rounds) && companyView.funding.rounds.length > 0 && (
+                                  <div style={{ marginTop: 8 }}>
+                                    <p><strong>Funding Rounds:</strong></p>
+                                    <ul className="muted" style={{ fontSize: 12, paddingLeft: 18 }}>
+                                      {companyView.funding.rounds.slice(0, 5).map((r, i) => (
+                                        <li key={i}>
+                                          {[r?.date || r?.roundDate, r?.amount || r?.funding, r?.series || r?.type]
+                                            .filter(Boolean)
+                                            .join(' • ')}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <p><strong>Funding:</strong> {companyView.funding}</p>
+                            )}
+                          </>
+                        )}
+                        <p><strong>Headquarters:</strong> {companyView.headquarters || '-'}</p>
+                      </div>
+                    </div>
+                    {Array.isArray(companyView.specialties) && companyView.specialties.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <p><strong>Specialties:</strong></p>
+                        <div className="muted" style={{ fontSize: 12 }}>{companyView.specialties.join(', ')}</div>
+                      </div>
+                    )}
+                    {Array.isArray(companyView.locations) && companyView.locations.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <p><strong>Locations (top 5):</strong></p>
+                        <ul className="muted" style={{ fontSize: 12, paddingLeft: 18 }}>
+                          {companyView.locations.map((loc, i) => (
+                            <li key={i}>{typeof loc === 'string' ? loc : (loc?.name || loc?.address || JSON.stringify(loc))}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="card-block">
+                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12 }}>
+{JSON.stringify(companyData, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 

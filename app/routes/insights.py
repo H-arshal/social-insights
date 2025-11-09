@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.auth import token_required
 from app.security import Validator
-from app.wrappers import RedditWrapper, YouTubeWrapper, InstagramWrapper
+from app.wrappers import RedditWrapper, YouTubeWrapper, LinkedInWrapper
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -24,6 +24,16 @@ def reddit_insights(current_user):
     data = RedditWrapper.get_subreddit_posts(subreddit, limit)
     return jsonify(data), 200
 
+@insights_bp.route('/insights/linkedin/company', methods=['GET'])
+@token_required
+@limiter.limit("5/minute")
+def linkedin_company(current_user):
+    name = request.args.get('name') or request.args.get('linkedinName')
+    if not name:
+        return jsonify({'error': 'Missing required parameter: name'}), 400
+    data = LinkedInWrapper.get_company_by_name(name)
+    return jsonify(data), 200
+
 @insights_bp.route('/insights/youtube/channels', methods=['GET'])
 @token_required
 @limiter.limit("5/minute")
@@ -41,29 +51,6 @@ def youtube_channel_search(current_user):
         max_results = 10
 
     data = YouTubeWrapper.search_channels(query=query, max_results=max_results, sort=sort, order=order)
-    return jsonify(data), 200
-
-@insights_bp.route('/insights/instagram/community', methods=['GET'])
-@token_required
-@limiter.limit("5/minute")
-def instagram_community(current_user):
-    url = request.args.get('url')
-    if not url or not url.startswith('http'):
-        return jsonify({'error': 'Valid profile URL is required'}), 400
-
-    data = InstagramWrapper.get_community(url)
-    return jsonify(data), 200
-
-@insights_bp.route('/insights/instagram/posts', methods=['GET'])
-@token_required
-@limiter.limit("5/minute")
-def instagram_posts(current_user):
-    username = request.args.get('username')
-    max_id = request.args.get('max_id', '')
-    if not username or len(username.strip()) < 2:
-        return jsonify({'error': 'Valid username is required'}), 400
-
-    data = InstagramWrapper.get_posts(username.strip(), max_id)
     return jsonify(data), 200
 
 @insights_bp.route('/insights/youtube', methods=['GET'])
