@@ -8,6 +8,7 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     setIsLoggedIn(!!token);
+    document.title = 'SocioPulse';
   }, []);
 
   const handleLogout = () => {
